@@ -1,0 +1,75 @@
+#!/usr/bin/python
+
+import epd7in5
+import Image
+import ImageDraw
+import ImageFont
+import sys  
+import datetime
+import pyowm
+import cssutils
+import logging
+
+cssutils.log.setLevel(logging.CRITICAL)
+
+reload(sys)  
+sys.setdefaultencoding('utf-8')
+
+EPD_WIDTH = 640
+EPD_HEIGHT = 384
+
+BLACK=0
+WHITE=255
+
+OPENWEATHERMAP_API_KEY='925c0afa7be149a36e3c0c6df89b6d14'
+OPENWEATHERMAP_LOCATION_ID=4724129
+WEATHERICON_CSS_URL='https://erikflowers.github.io/weather-icons/css/weather-icons.css'
+
+def find_weather_icon(condition_code):
+    css_parser = cssutils.CSSParser()
+    stylesheet = css_parser.parseFile(filename="weather-icons.css")
+
+    for css_rule in stylesheet.cssRules:
+        if css_rule.type == css_rule.STYLE_RULE:
+            if 'wi-owm-{}'.format(condition_code) in css_rule.selectorText:
+                return css_rule.style.content[1]
+    return ""
+
+def displayScreen():
+    owm = pyowm.OWM(OPENWEATHERMAP_API_KEY)
+    observation = owm.weather_at_id(OPENWEATHERMAP_LOCATION_ID)
+    weather = observation.get_weather()
+
+    epd = epd7in5.EPD()
+    epd.init()
+
+    # For simplicity, the arguments are explicit numerical coordinates
+    image = Image.new('1', (EPD_WIDTH, EPD_HEIGHT), 1)    # 1: clear the frame
+    draw = ImageDraw.Draw(image)
+
+    defaultFont = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', 32)
+    clockFont = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', 54)
+    quoteFont = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', 18)
+    weatherTempFont = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', 58)
+    weatherCondFont = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', 42)
+    font_weather_icons = ImageFont.truetype('fonts/weathericons-regular-webfont.ttf', 80)
+   
+    draw.line((250,int(EPD_HEIGHT/2)-30,EPD_WIDTH-15,int(EPD_HEIGHT/2)-30),fill=BLACK,width=2) 
+    draw.rectangle((15,15, 250, EPD_HEIGHT-15),fill=BLACK,outline=BLACK)
+
+    draw.text((30,30),find_weather_icon(weather.get_weather_code()),font=font_weather_icons,fill=WHITE)
+    draw.text((130,60),u'{}\N{DEGREE SIGN}'.format(str(weather.get_temperature('fahrenheit')['temp']).split('.')[0]),font=weatherTempFont,fill=WHITE)
+    draw.text((30,180),weather.get_status(),font=weatherCondFont,fill=WHITE)
+
+    draw.text((30,270),u'High:{}\N{DEGREE SIGN}'.format(str(weather.get_temperature('fahrenheit')['temp_max']).split('.')[0]),font=defaultFont,fill=WHITE)
+    draw.text((30,300),u'Low: {}\N{DEGREE SIGN}'.format(str(weather.get_temperature('fahrenheit')['temp_min']).split('.')[0]),font=defaultFont,fill=WHITE)
+    draw.text((30,330), "Hmd: {}%".format(weather.get_humidity()),font=defaultFont,fill=WHITE)
+
+    draw.text((265,25),datetime.date.today().strftime('%A'),font=clockFont,fill=BLACK)
+    draw.text((265,90),datetime.date.today().strftime('%b %-d %Y'),font=clockFont,fill=BLACK)
+    draw.multiline_text((265,int(EPD_HEIGHT/2)-15),"\"To each there comes in their \nlifetime a special moment when \nthey are figuratively tapped on \nthe shoulder and offered the \nchance to do a very special thing, \nunique to them and fitted to their \ntalents. What a tragedy if that \nmoment finds them unprepared or \nunqualified for that which could \nhave been their finest hour.\"\n           -- Winston Churchill",font=quoteFont,fill=BLACK)
+
+    epd.display_frame(epd.get_frame_buffer(image))
+
+if __name__ == '__main__':
+    displayScreen()
